@@ -1,0 +1,299 @@
+#include "lanelet_work/Behavior_Planning.hpp"
+
+
+
+
+behavior_planning::behavior_planning(ros::NodeHandle& nodeHandle) : nodeHandle_(nodeHandle) {
+   
+    if (!readParameters()) {
+        ROS_ERROR("calismadi.");
+        ros::requestShutdown();
+    }
+    
+    lanelet::projection::UtmProjector projector(lanelet::Origin({15,30}));
+    map_ = lanelet::load(map_path, projector);
+    
+    lanelet::traffic_rules::TrafficRulesPtr trafficRules = lanelet::traffic_rules::TrafficRulesFactory::create(lanelet::Locations::Germany, lanelet::Participants::Vehicle);
+    routingGraph = lanelet::routing::RoutingGraph::build(*map_,*trafficRules);
+    
+    
+    start_point_subscriber = nodeHandle_.subscribe("/gps_odom",10,&behavior_planning::start_point_converter,this); 
+    stop_point_subscriber = nodeHandle_.subscribe("/move_base_simple/goal",10,&behavior_planning::stop_point_converter,this);
+
+    markerArrayPublisher_ = nodeHandle_.advertise<visualization_msgs::MarkerArray>("lanelet_markers", 1);
+      
+    pathPublisher= nodeHandle_.advertise<nav_msgs::Path>("ShortestPath",1);
+   
+     for (auto point : map_->pointLayer)
+    {
+        point.x() = point.attribute("local_x").asDouble().value();
+        point.y() = point.attribute("local_y").asDouble().value();
+    }
+
+      
+
+}
+
+
+
+void behavior_planning::callback() {
+    
+
+   if(!dongu){
+     
+     dongu=true; 
+   
+        
+
+
+
+        for (const auto& lanelet : map_->laneletLayer){
+            
+            lanelet_sayisi++;
+            visualization_msgs::Marker marker;
+            marker.header.stamp = ros::Time::now();
+            marker.ns = "lanelets";
+            marker.type = visualization_msgs::Marker::LINE_STRIP;
+            marker.action = visualization_msgs::Marker::ADD;
+            marker.pose.orientation.w = 1.0;
+            marker.scale.x = 0.2; 
+            marker.color.r = 1.0; 
+            marker.color.a = 1.0;
+            marker.color.g= 0.3;
+            marker.color.b=0.9;
+            marker.header.frame_id = "map";
+            std::vector<geometry_msgs::Point> sag_sinir;
+            std::vector<geometry_msgs::Point> sol_sinir;
+       
+       
+            for (auto point : lanelet.rightBound()){
+                
+                geometry_msgs::Point p;
+
+                p.x = point.x();
+                p.y = point.y();
+                
+                sag_sinir.push_back(p); marker.id = sayac;
+                marker.points = sag_sinir;
+                sayac++; 
+            }
+   
+         markerArray.markers.push_back(marker);
+
+            for (auto point : lanelet.leftBound()){
+               
+                
+                geometry_msgs::Point p;
+
+                p.x = point.x();
+                p.y = point.y();
+
+                sol_sinir.push_back(p);
+                marker.id = sayac;
+                marker.points = sol_sinir;
+                sayac++;
+            }
+
+         markerArray.markers.push_back(marker);
+        }
+    
+        
+        for (const auto& lanelet : map_->laneletLayer) {
+            
+            visualization_msgs::Marker marker2;
+            std::vector<geometry_msgs::Point> center_line;
+     
+            marker2.header.stamp = ros::Time::now();
+            marker2.ns = "lanelets";
+            marker2.type = visualization_msgs::Marker::LINE_STRIP;
+            marker2.action = visualization_msgs::Marker::ADD;
+            marker2.pose.orientation.w = 1.0;
+            marker2.scale.x = 0.2; 
+            marker2.color.r = 1; 
+            marker2.color.a = 0.15;
+            marker2.color.g= 1;
+            marker2.color.b=1;
+            marker2.header.frame_id = "map"; 
+    
+   
+            for (auto point : lanelet.centerline()){
+                geometry_msgs::Point p;
+
+                p.x = point.x();
+                p.y = point.y();
+        
+                center_line.push_back(p);
+                marker2.id = sayac;
+                marker2.points = center_line;
+                sayac++;
+                }
+
+        markerArray.markers.push_back(marker2);
+         }
+     
+        
+        for(const auto& area : map_->areaLayer){  
+            
+            std::vector<geometry_msgs::Point> area123;
+            visualization_msgs::Marker marker3;
+            
+            
+            marker3.header.stamp = ros::Time::now();
+            marker3.ns = "lanelets";
+            marker3.type = visualization_msgs::Marker::LINE_STRIP;
+            marker3.action = visualization_msgs::Marker::ADD;
+            marker3.scale.x = 0.2; 
+            marker3.color.r = 0.4; 
+            marker3.color.a = 2.0;        
+            marker3.color.b=0.80;
+            marker3.header.frame_id = "map";
+   
+            
+   
+             for(auto linestring:area.outerBound()){
+   
+                for(const auto& point: linestring){
+                    
+                    geometry_msgs::Point p;
+
+                    p.x=point.x();
+                    p.y=point.y();
+    
+                    area123.push_back(p);
+                    marker3.id=sayac;
+                    marker3.points = area123;
+                    sayac++;
+                } 
+            }   
+       
+       
+         markerArray.markers.push_back(marker3);
+     
+
+        }
+  
+    }   
+
+    
+     
+     
+     if(Goal){
+     
+     shortestPath = routingGraph->shortestPath(LaneletA,LaneletB, 1);
+     Goal=false;
+     
+     
+     
+
+         if(shortestPath){
+      
+            for (const auto& lanelet : *shortestPath){
+               
+                for (const auto& point : lanelet.centerline()){
+                    geometry_msgs::PoseStamped pathPoints;
+                    pathPoints.pose.position.x = point.x();
+                    pathPoints.pose.position.y = point.y();
+                    pathPoints.pose.position.z = 0 ;
+                    
+                    
+                    if(-2<startx-point.x() && startx-point.x()<2){
+                
+                      if(-2<starty-point.y() && starty-point.y()<2){
+
+                        PathMsg.poses.clear(); 
+
+                    }
+                    }
+
+                    PathMsg.header.frame_id="map";
+                    PathMsg.poses.push_back(pathPoints);
+                }
+            
+            }
+        }
+     }
+
+
+
+
+
+auto removeIt = std::remove_if(PathMsg.poses.begin(), PathMsg.poses.end(), [&](const geometry_msgs::PoseStamped& poseStamped) {
+    return (-3 < -poseStamped.pose.position.x + startx && -poseStamped.pose.position.x + startx < 3) &&
+           (-3 < -poseStamped.pose.position.y + starty && -poseStamped.pose.position.y + starty < 3);
+});
+
+
+PathMsg.poses.erase(removeIt, PathMsg.poses.end());
+
+
+
+ 
+ pathPublisher.publish(PathMsg);
+ markerArrayPublisher_.publish(markerArray);
+ std::cout<<"published"<<std::endl;
+ 
+     
+}
+     
+
+void behavior_planning::start_point_converter(const nav_msgs::Odometry::ConstPtr& pose){
+ 
+ startx =(pose->pose.pose.position.x);
+ starty = (pose->pose.pose.position.y);
+lanelet::BasicPoint2d start(startx,starty);
+
+callback();
+
+LaneletA = en_yakin_lanelet(start,lanelet_sayisi);
+
+}
+
+void behavior_planning::stop_point_converter(const geometry_msgs::PoseStamped::ConstPtr& nokta){
+ 
+ double stopx = nokta->pose.position.x;
+ double stopy = nokta->pose.position.y;
+ 
+ 
+ lanelet::BasicPoint2d stop(stopx,stopy);
+
+ LaneletB = en_yakin_lanelet(stop,lanelet_sayisi);
+
+ Goal=true;
+  
+ 
+}
+
+
+bool behavior_planning::readParameters() {
+   
+    if (!nodeHandle_.getParam("map_path", map_path)) {
+        ROS_ERROR("Parametre alamadim.");
+        return false;
+    }
+    return true;
+
+
+
+
+}
+
+
+lanelet::ConstLanelet behavior_planning::en_yakin_lanelet(lanelet::BasicPoint2d point,int lanelet_miktari){
+
+std::vector<std::pair<double, lanelet::Lanelet>> closestLanelets = lanelet::geometry::findNearest(map_->laneletLayer,point,lanelet_miktari);
+
+    lanelet::ConstLanelet Isaretli_Lanelet;
+    bool a=false;
+    
+    for (const auto& laneletPair : closestLanelets) {
+        
+     const lanelet::Lanelet& closestLanelet = laneletPair.second;
+     
+        if(!a){
+               Isaretli_Lanelet=closestLanelet;
+               a=true; 
+         }
+    
+    }
+    return Isaretli_Lanelet;
+}

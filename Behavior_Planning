@@ -1,0 +1,81 @@
+#pragma once
+
+
+
+
+#include <lanelet2_core/primitives/Lanelet.h>
+#include <lanelet2_io/Io.h>
+#include <lanelet2_io/io_handlers/Factory.h>
+#include <lanelet2_io/io_handlers/Writer.h>
+#include <lanelet2_projection/UTM.h>
+#include "ros/ros.h"
+#include <visualization_msgs/MarkerArray.h>
+#include <visualization_msgs/Marker.h>
+#include "geometry_msgs/Point.h"
+#include "geometry_msgs/PoseWithCovarianceStamped.h"
+#include "geometry_msgs/PoseStamped.h"
+#include <iostream>
+#include <lanelet2_core/LaneletMap.h>
+#include <lanelet2_io/io_handlers/Parser.h>
+#include <lanelet2_routing/Route.h>
+#include <lanelet2_routing/RoutingCost.h>
+#include <lanelet2_routing/RoutingGraph.h>
+#include <lanelet2_routing/RoutingGraphContainer.h>
+#include <lanelet2_traffic_rules/TrafficRulesFactory.h>
+#include <nav_msgs/Path.h>
+#include <nav_msgs/Odometry.h>
+#include <algorithm>
+
+
+
+
+class behavior_planning {
+
+public:
+    
+    behavior_planning(ros::NodeHandle& nodeHandle);
+    void callback();  
+    bool readParameters();
+    void start_point_converter(const nav_msgs::Odometry::ConstPtr& pose);
+    void stop_point_converter(const geometry_msgs::PoseStamped::ConstPtr& nokta);
+    lanelet::ConstLanelet en_yakin_lanelet(lanelet::BasicPoint2d point,int lanelet_miktari);
+
+
+private:
+   
+    int sayac{0},lanelet_sayisi{0},indis_bulucu{0};
+    bool dongu{false},Goal{false};
+    
+    double startx;
+    double starty;
+   
+   
+   
+    lanelet::ConstLanelet LaneletA;
+    lanelet::ConstLanelet LaneletB;
+    lanelet::LaneletMapPtr map_;
+    lanelet::routing::RoutingGraphPtr routingGraph;
+    lanelet::Optional<lanelet::routing::LaneletPath> shortestPath ;
+   
+    ros::NodeHandle& nodeHandle_;
+    ros::Publisher markerArrayPublisher_;
+    ros::Publisher pathPublisher;
+    ros::Subscriber start_point_subscriber;
+    ros::Subscriber stop_point_subscriber;
+    ros::Timer timer_;
+    
+   
+   visualization_msgs::MarkerArray markerArray; 
+    
+    
+    
+    
+    nav_msgs::Path PathMsg;
+
+   
+    std::string map_path;
+   
+   
+
+   
+};
